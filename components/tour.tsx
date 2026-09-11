@@ -5,6 +5,8 @@ export type Step = {target: string; title: string; body: string};
 
 const KEY = 'vidscope.tour.v1';
 const PAD = 8;
+// Approximate rendered card height, used only to decide above-or-below placement.
+const CARD_H = 190;
 
 export function tourWasSeen() {
   try {
@@ -23,24 +25,41 @@ export function Tour({steps, open, onClose}: {steps: Step[]; open: boolean; onCl
   const live = steps.filter((s) => (typeof document === 'undefined' ? true : document.querySelector(s.target)));
   const step = live[Math.min(index, live.length - 1)];
 
-  const place = useCallback(() => {
-    if (!step) return;
-    const node = document.querySelector(step.target);
-    setBox(node ? node.getBoundingClientRect() : null);
-  }, [step]);
-
+  // Measure once synchronously so the spotlight is correct the moment a step opens,
+  // then follow the target while the smooth scroll settles. Scroll events from the
+  // page's scrolling element do not reliably reach a window listener here, so tracking
+  // is driven by a frame loop, backed by timers because requestAnimationFrame is
+  // suspended entirely while the tab is in the background.
   useEffect(() => {
     if (!open || !step) return;
-    document.querySelector(step.target)?.scrollIntoView({block: 'center', behavior: 'smooth'});
-    const timer = setTimeout(place, 320);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
+    let last = '';
+    const measure = () => {
+      const node = document.querySelector(step.target);
+      const rect = node ? node.getBoundingClientRect() : null;
+      const key = rect ? `${rect.top}|${rect.left}|${rect.width}|${rect.height}` : 'none';
+      if (key === last) return;
+      last = key;
+      setBox(rect);
     };
-  }, [open, step, place]);
+    measure();
+    document.querySelector(step.target)?.scrollIntoView({block: 'center', behavior: 'smooth'});
+    measure();
+
+    let frame = 0;
+    const tick = () => {
+      measure();
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    // Catches the scroll settling when frames are not being served.
+    const timers = [60, 200, 400, 700].map((ms) => setTimeout(measure, ms));
+    window.addEventListener('resize', measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      timers.forEach(clearTimeout);
+      window.removeEventListener('resize', measure);
+    };
+  }, [open, step]);
 
   const finish = useCallback(() => {
     try {
@@ -66,9 +85,14 @@ export function Tour({steps, open, onClose}: {steps: Step[]; open: boolean; onCl
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const width = Math.min(330, vw - 32);
-  const below = !box || box.bottom + 190 < vh;
-  const top = box ? (below ? box.bottom + 14 : Math.max(16, box.top - 190)) : vh / 2 - 90;
-  const left = box ? Math.min(Math.max(16, box.left), vw - width - 16) : (vw - width) / 2;
+  // Prefer sitting under the target, flip above when there is no room, and clamp to the
+  // viewport either way so the card is never pushed off-screen by a tall target.
+  const clamp = (value: number, max: number) => Math.max(16, Math.min(value, Math.max(16, max)));
+  const below = !box || box.bottom + CARD_H + 16 < vh;
+  const top = box
+    ? clamp(below ? box.bottom + 14 : box.top - CARD_H - 14, vh - CARD_H - 16)
+    : Math.max(16, vh / 2 - CARD_H / 2);
+  const left = box ? clamp(box.left, vw - width - 16) : Math.max(16, (vw - width) / 2);
   const last = index >= live.length - 1;
 
   return (
@@ -77,6 +101,7 @@ export function Tour({steps, open, onClose}: {steps: Step[]; open: boolean; onCl
       {box && (
         <div
           className="tour-spot"
+          data-target={step.target}
           style={{
             top: box.top - PAD,
             left: box.left - PAD,

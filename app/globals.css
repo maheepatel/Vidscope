@@ -181,7 +181,8 @@ body{background:var(--bg);color:var(--ink)}button:focus-visible,a:focus-visible,
 .tour-foot small{font-size:11px;color:var(--ink-3);margin-right:auto;font-variant-numeric:tabular-nums}
 .tour-foot button{font-size:13px;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
 .tour-foot button.primary{background:var(--brand);border-color:var(--brand);color:var(--on-brand);font-weight:600}
-.tour-spot{position:fixed;z-index:60;border:2px solid var(--brand);border-radius:8px;box-shadow:0 0 0 4px var(--ring-soft);pointer-events:none;transition:all .22s ease}
+/* No transition: the spotlight is repositioned every frame, so easing would make it lag the target during a scroll. */
+.tour-spot{position:fixed;z-index:60;border:2px solid var(--brand);border-radius:8px;box-shadow:0 0 0 4px var(--ring-soft);pointer-events:none}
 .tour-open{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);background:none;border:0}
 .tour-open:hover{color:var(--brand)}
 

@@ -10,7 +10,7 @@ try{
 writeFileSync(join(dir,'trust.mjs'),compile(readFileSync('lib/trust.ts','utf8')));
 writeFileSync(join(dir,'videos.mjs'),compile(readFileSync('lib/videos.ts','utf8')));
 const {classify,scoreVideo}=await import(pathToFileURL(join(dir,'trust.mjs')));
-const {seconds,dedupeVideos,derivedThumbnail,posterSeed,filterVideos}=await import(pathToFileURL(join(dir,'videos.mjs')));
+const {seconds,dedupeVideos,derivedThumbnail,posterSeed,filterVideos,languageOf,languageLabel,languagesIn}=await import(pathToFileURL(join(dir,'videos.mjs')));
 
 // --- comment classification -------------------------------------------------
 assert.equal(classify('I made this yesterday and it turned out amazing'),'outcome');
@@ -141,5 +141,37 @@ assert.equal(kept.alternates.length,2);
 // Short titles must not be collapsed together just because they are short.
 assert.equal(dedupeVideos([{url:'a',title:'Cake',views:1},{url:'b',title:'Bread',views:1}]).length,2);
 
-console.log('PASS: comment classification, outcome-weighted trust scoring, bot and engagement-bait rejection, complaint and age penalties, sample-size damping, score bounds, duration parsing, length filtering, thumbnail derivation, placeholder seeds and repost collapse.');
+
+// --- duration: Brave clock form as well as YouTube ISO --------------------------
+assert.equal(seconds('00:36'),36);
+assert.equal(seconds('4:13'),253);
+assert.equal(seconds('1:02:03'),3723);
+assert.equal(seconds('00:00'),null);
+assert.equal(seconds('not a duration'),null);
+
+// --- language detection ----------------------------------------------------------
+assert.equal(languageOf({language:'es-419',title:'Los mejores chocolates'}),'es');
+assert.equal(languageOf({language:'en-US',title:'Best cookies'}),'en');
+// No tag supplied: fall back to the script the title is written in.
+assert.equal(languageOf({title:'सबसे आसान रेसिपी'}),'hi');
+assert.equal(languageOf({title:'வணிகம்'}),'ta');
+assert.equal(languageOf({title:'Как испечь'}),'ru');
+assert.equal(languageOf({title:'Plain english title'}),null,'latin script alone is not evidence of a language');
+assert.equal(languageLabel('hi'),'Hindi');
+assert.deepEqual(languagesIn([{language:'en',title:'a'},{language:'en',title:'b'},{language:'es',title:'c'},{title:'d'}]),[['en',2],['es',1]]);
+const langFiltered=filterVideos([{platform:'YouTube',language:'hi',title:'a'},{platform:'YouTube',language:'en',title:'b'}],
+ {platform:'All platforms',date:'all',metric:'all',language:'hi'});
+assert.equal(langFiltered.length,1);
+
+// --- repost collapse keeps the copy that matches the active sort -------------------
+const mirrors=[
+ {url:'https://youtube.com/watch?v=hi',title:'Ultimate Sourdough Bread Masterclass',views:9000000,likes:10,comments:12,thumbnail:'t',platform:'YouTube'},
+ {url:'https://youtube.com/watch?v=lo',title:'Ultimate Sourdough Bread Masterclass HD',views:100000,likes:900,comments:34000,thumbnail:'t',platform:'YouTube'},
+];
+assert.equal(dedupeVideos(mirrors,'views:desc')[0].comments,12,'views sort keeps the most-watched copy');
+assert.equal(dedupeVideos(mirrors,'comments:desc')[0].comments,34000,'comment sort must not hide the most-commented copy');
+assert.equal(dedupeVideos(mirrors,'likes:desc')[0].likes,900);
+assert.equal(dedupeVideos(mirrors,'comments:desc')[0].alternates.length,1);
+
+console.log('PASS: comment classification, outcome-weighted trust scoring, bot and engagement-bait rejection, complaint and age penalties, sample-size damping, score bounds, duration parsing, length filtering, thumbnail derivation, placeholder seeds, clock-form durations, language detection and sort-aware repost collapse.');
 }finally{rmSync(dir,{recursive:true,force:true})}

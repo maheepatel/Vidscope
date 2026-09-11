@@ -193,3 +193,42 @@ body{background:var(--bg);color:var(--ink)}button:focus-visible,a:focus-visible,
 
 @media(max-width:1150px){.verdict-grid{grid-template-columns:1fr}.verdict-card{border-right:0;border-bottom:1px solid var(--line)}.verdict-card:last-child{border-bottom:0}}
 @media(max-width:750px){.verdict-head{padding:13px 14px}.verdict-card{padding:14px;grid-template-columns:62px minmax(0,1fr);gap:11px}.theme-toggle button{width:27px;height:27px}}
+
+/* ── In-page player ────────────────────────────────────────────────────── */
+.player-backdrop{position:fixed;inset:0;z-index:80;background:#0a1020cc;backdrop-filter:blur(3px);display:grid;place-items:center;padding:24px;overflow-y:auto}
+.player-shell{display:grid;gap:0;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 24px 70px #08122e40}
+.player-shell.landscape{grid-template-columns:minmax(0,1fr) 340px;max-width:1180px}
+.player-shell.portrait{grid-template-columns:minmax(0,420px) 340px;max-width:790px}
+.player-frame{position:relative;background:#000;min-width:0}
+.player-shell.landscape .player-frame{aspect-ratio:16/9}
+.player-shell.portrait .player-frame{aspect-ratio:9/16;max-height:78vh}
+.player-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.player-loading{position:absolute;inset:0;display:grid;place-items:center;color:#8fa3c8}
+.player-none{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:28px;text-align:center;color:#c3cfe4;background:var(--surface-2)}
+.player-none p{margin:0;font-size:14px;line-height:1.6;color:var(--ink-2);max-width:320px}
+.player-side{position:relative;padding:20px 20px 22px;overflow-y:auto;max-height:min(78vh,760px);border-left:1px solid var(--line)}
+.player-close{position:absolute;right:12px;top:12px;display:grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.player-close:hover{background:var(--surface-2);color:var(--ink)}
+.player-side .source-label{font-size:11px;letter-spacing:.4px;text-transform:uppercase}
+.player-side h3{margin:9px 40px 6px 0;font-size:18px;line-height:1.35;font-weight:650;letter-spacing:-.4px;color:var(--ink);overflow-wrap:anywhere}
+.player-creator{margin:0 0 15px;font-size:12px;color:var(--ink-3)}
+.player-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px;background:var(--surface-2);border-radius:8px}
+.player-metrics>div{display:grid;gap:5px;min-width:0}
+.player-metrics span{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--ink-3)}
+.player-metrics strong{font-size:17px;font-weight:650;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.player-metrics strong.unknown{color:var(--ink-4);font-weight:400}
+.player-trust{margin-top:15px;padding-top:15px;border-top:1px solid var(--line);display:grid;gap:9px}
+.player-trust p{margin:0;font-size:12px;line-height:1.6;color:var(--ink-2)}
+.player-desc{margin:15px 0 0;font-size:12px;line-height:1.65;color:var(--ink-3);white-space:pre-wrap;overflow-wrap:anywhere}
+.player-out{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:18px;padding:11px;border-radius:7px;background:var(--brand);color:var(--on-brand);font-size:13px;font-weight:600}
+.player-out:hover{background:var(--brand-strong)}
+.play-badge{position:absolute;left:8px;bottom:8px;z-index:3;display:flex;align-items:center;gap:4px;background:#0b1120cc;color:#fff;font-size:10px;font-weight:600;padding:3px 7px;border-radius:4px;letter-spacing:.2px}
+
+@media(max-width:1000px){
+ .player-backdrop{padding:0;align-items:stretch}
+ .player-shell,.player-shell.portrait{grid-template-columns:minmax(0,1fr);max-width:none;border-radius:0;border:0;min-height:100dvh;align-content:start}
+ .player-shell.portrait .player-frame{aspect-ratio:9/16;max-height:62vh}
+ .player-side{border-left:0;border-top:1px solid var(--line);max-height:none}
+}
+.player-side h3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.player-desc{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}

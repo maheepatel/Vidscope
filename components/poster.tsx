@@ -11,11 +11,15 @@ export function Thumb({
   eager = false,
   children,
   className = 'thumbnail',
+  onPlay,
 }: {
   video: Video;
   eager?: boolean;
   children?: React.ReactNode;
   className?: string;
+  // When the platform offers an embeddable player, clicking opens it in place.
+  // Without this the thumbnail stays an ordinary link out to the source.
+  onPlay?: () => void;
 }) {
   const sources = [video.thumbnail, derivedThumbnail(video.url)].filter(Boolean) as string[];
   const [attempt, setAttempt] = useState(0);
@@ -28,7 +32,17 @@ export function Thumb({
       href={video.url}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label={'Watch ' + video.title}
+      aria-label={(onPlay ? 'Play ' : 'Watch ') + video.title}
+      onClick={
+        onPlay
+          ? (e) => {
+              // Leave modified clicks alone so "open in new tab" still works.
+              if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+              e.preventDefault();
+              onPlay();
+            }
+          : undefined
+      }
     >
       <div className="poster" style={{['--h' as string]: hue}} aria-hidden="true">
         <b>{initials}</b>

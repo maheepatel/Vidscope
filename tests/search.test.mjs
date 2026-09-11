@@ -9,9 +9,11 @@ const compile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.E
 try{
 writeFileSync(join(dir,'videos.mjs'),compile(readFileSync('lib/videos.ts','utf8')));
 writeFileSync(join(dir,'discovery.mjs'),compile(readFileSync('lib/discovery.ts','utf8').replace("from './videos'","from './videos.mjs'")));
+writeFileSync(join(dir,'enrich.mjs'),compile(readFileSync('lib/enrich.ts','utf8').replace("from './videos'","from './videos.mjs'")));
 writeFileSync(join(dir,'route.mjs'),compile(readFileSync('app/api/search/route.ts','utf8')
 .replace("import {env} from 'cloudflare:workers';",'const env={};')
-.replace(/from ['"]@\/lib\/discovery['"]/, "from './discovery.mjs'")));
+.replace(/from ['"]@\/lib\/discovery['"]/, "from './discovery.mjs'")
+.replace(/from ['"]@\/lib\/enrich['"]/, "from './enrich.mjs'")));
 const {sortVideos,filterVideos,platformOf,youtubeId,safeUrl}=await import(pathToFileURL(join(dir,'videos.mjs')));
 const now=Date.parse('2026-09-08T00:00:00Z');
 const fixtures=[{id:'a',platform:'YouTube',views:0,likes:2,comments:null,published:'2026-09-07T00:00:00Z'},{id:'b',platform:'Reddit',views:null,likes:null,comments:8,published:'2026-07-01T00:00:00Z'},{id:'c',platform:'YouTube',views:40,likes:null,comments:0,published:null},{id:'future',platform:'Other',views:10,published:'2027-01-01T00:00:00Z'}];
@@ -25,7 +27,21 @@ assert.deepEqual(sortVideos([{views:null},{views:0},{views:50}],'views:asc').map
 assert.deepEqual(sortVideos([{views:null},{views:0},{views:50}],'views:desc').map(v=>v.views),[50,0,null]);
 assert.equal(platformOf('https://youtube.com.evil.com/watch?v=abc'),'Other');assert.equal(safeUrl('javascript:alert(1)'),'');assert.equal(youtubeId('https://youtu.be/rEdl2Uetpvo'),'rEdl2Uetpvo');
 const req=b=>new Request('https://vidscope.test/api/search',{method:'POST',body:JSON.stringify(b),headers:{origin:'https://vidscope.test'}});
-assert.equal((await POST(req({q:''}))).status,400);const missing=await (await POST(req({q:'cookies',braveKey:'visitor-key'}))).json();assert.equal(missing.videos.length,0);assert.equal(missing.sources.length,8);assert.ok(missing.sources.every(s=>s.state==='not_configured'));
+assert.equal((await POST(req({q:''}))).status,400);
+// With no keys every keyed source reports not_configured. Dailymotion is the exception:
+// its API needs no key, so it must still answer. Its network call is stubbed here.
+const realFetch=globalThis.fetch;
+globalThis.fetch=async url=>new URL(url).hostname==='api.dailymotion.com'
+ ? Response.json({list:[{id:'x1',title:'Cookies',views_total:5,likes_total:1,comments_total:0,created_time:1600000000,duration:60}],has_more:false})
+ : realFetch(url);
+const missing=await (await POST(req({q:'cookies',braveKey:'visitor-key'}))).json();
+globalThis.fetch=realFetch;
+assert.equal(missing.sources.length,8);
+const keyed=missing.sources.filter(s=>s.source!=='Dailymotion');
+assert.ok(keyed.every(s=>s.state==='not_configured'),'every keyed source reports not_configured');
+assert.equal(missing.videos.length,1,'Dailymotion still returns results without any key');
+assert.equal(missing.videos[0].platform,'Dailymotion');
+assert.equal(missing.enrichment.enabled,false);
 assert.equal((await POST(req({q:'cookies',sources:[]}))).status,400);assert.equal((await POST(req({q:'cookies',pages:{YouTube:-1}}))).status,400);
 assert.equal((await POST(new Request('https://vidscope.test/api/search',{method:'POST',headers:{origin:'https://evil.test'},body:'{}'}))).status,403);
 const fixture={id:'rEdl2Uetpvo',snippet:{title:'Cookies',channelTitle:'Baker',thumbnails:{high:{url:'https://i.ytimg.com/vi/rEdl2Uetpvo/hqdefault.jpg'}}},statistics:{viewCount:'100',likeCount:'0'},contentDetails:{duration:'PT2M'}};
@@ -42,5 +58,66 @@ let d=await discover('cookies',{youtube:'test',brave:'test'},['YouTube',...Objec
 assert.equal(d.videos.length,6);assert.equal(d.videos[0].likes,0);assert.equal(d.videos[0].comments,null);assert.equal(d.nextYoutube,'next-token');assert.ok(d.sources.every(s=>s.state==='ok'&&s.count===1));
 fail=true;d=await discover('cookies',{brave:'test'},['Instagram','TikTok'],{},null,'views:desc');assert.equal(d.videos.length,1);assert.equal(d.sources[1].state,'unavailable');assert.match(d.sources[1].message,/rate limit/);
 calls.length=0;await discover('cookies',{brave:'test'},['Instagram'],{Instagram:2},null,'views:desc');assert.equal(calls.length,1);assert.equal(calls[0].searchParams.get('offset'),'2');assert.match(calls[0].searchParams.get('q'),/site:instagram/);
-console.log('PASS: filters, descending sorting, null/zero counts, URL checks, missing server keys, rejected visitor keys, six-source retrieval, deduplication, source selection, pagination and partial failure. Provider responses mocked; live coverage unverified.');
+
+// --- Dailymotion is queried through its own API, not the web index ----------------
+calls.length=0;
+globalThis.fetch=async url=>{const u=new URL(url);calls.push(u);
+ if(u.hostname==='api.dailymotion.com')return Response.json({list:[{id:'x7uopeu',title:'Sourdough',views_total:20,likes_total:3,comments_total:1,created_time:1593206629,duration:76,language:'en','owner.screenname':'Baker'}],has_more:true});
+ return Response.json({results:[]});};
+let dm=await discover('sourdough',{brave:'test'},['Dailymotion'],{},null,'views:desc');
+assert.equal(calls.length,1);
+assert.equal(calls[0].hostname,'api.dailymotion.com','Dailymotion must not go through Brave');
+assert.equal(dm.videos.length,1);
+assert.equal(dm.videos[0].likes,3,'Dailymotion supplies likes');
+assert.equal(dm.videos[0].comments,1,'Dailymotion supplies comments');
+assert.equal(dm.videos[0].views,20);
+assert.ok(dm.videos[0].published.startsWith('2020-'),'created_time is converted to ISO');
+assert.equal(dm.videos[0].url,'https://www.dailymotion.com/video/x7uopeu');
+// It needs no Brave key at all.
+calls.length=0;
+dm=await discover('sourdough',{},['Dailymotion'],{},null,'views:desc');
+assert.equal(dm.sources[0].state,'ok','Dailymotion works with no keys configured');
+
+// --- a date window is pushed down to every provider -------------------------------
+calls.length=0;
+globalThis.fetch=async url=>{const u=new URL(url);calls.push(u);
+ if(u.hostname==='api.dailymotion.com')return Response.json({list:[],has_more:false});
+ if(u.hostname==='www.googleapis.com')return Response.json({items:[],nextPageToken:null});
+ return Response.json({results:[]});};
+await discover('sourdough',{brave:'test',youtube:'test'},['YouTube','Dailymotion','Vimeo'],{},null,'views:desc','365');
+const yt=calls.find(c=>c.hostname==='www.googleapis.com');
+const dmc=calls.find(c=>c.hostname==='api.dailymotion.com');
+const br=calls.find(c=>c.hostname==='api.search.brave.com');
+assert.ok(yt.searchParams.get('publishedAfter'),'YouTube gets publishedAfter');
+assert.ok(Date.parse(yt.searchParams.get('publishedAfter'))>Date.now()-400*86400000);
+assert.ok(Number(dmc.searchParams.get('created_after'))>0,'Dailymotion gets created_after');
+assert.equal(br.searchParams.get('freshness'),'py','Brave gets a freshness window');
+// With no window, none of those parameters are sent.
+calls.length=0;
+await discover('sourdough',{brave:'test',youtube:'test'},['YouTube','Dailymotion','Vimeo'],{},null,'views:desc','all');
+assert.equal(calls.find(c=>c.hostname==='www.googleapis.com').searchParams.get('publishedAfter'),null);
+assert.equal(calls.find(c=>c.hostname==='api.dailymotion.com').searchParams.get('created_after'),null);
+assert.equal(calls.find(c=>c.hostname==='api.search.brave.com').searchParams.get('freshness'),null);
+
+// --- enrichment stays off unless a provider is configured --------------------------
+const {enrich,enrichmentStatus}=await import(pathToFileURL(join(dir,'enrich.mjs')));
+assert.equal(enrichmentStatus().enabled,false);
+const untouched=[{url:'https://www.instagram.com/reel/abc/',platform:'Instagram',views:null,likes:null,comments:null}];
+const passthrough=await enrich(untouched);
+assert.equal(passthrough.enriched,0);
+assert.deepEqual(passthrough.videos,untouched,'no provider means results pass through unchanged');
+process.env.ENRICH_PROVIDER='brightdata';
+assert.match(enrichmentStatus().reason,/ENRICH_API_KEY is not set/);
+process.env.ENRICH_PROVIDER='nonsense';process.env.ENRICH_API_KEY='k';
+assert.match(enrichmentStatus().reason,/Unknown ENRICH_PROVIDER/);
+// A vendor failure must degrade to no data rather than break the search.
+process.env.ENRICH_PROVIDER='brightdata';
+globalThis.fetch=async()=>{throw new Error('vendor down')};
+const failed=await enrich(untouched);
+assert.equal(failed.enriched,0);
+assert.equal(failed.error,'vendor down');
+assert.deepEqual(failed.videos,untouched);
+delete process.env.ENRICH_PROVIDER;delete process.env.ENRICH_API_KEY;
+
+console.log('PASS: filters, descending sorting, null/zero counts, URL checks, missing server keys, rejected visitor keys, six-source retrieval, deduplication, source selection, pagination, partial failure, native Dailymotion retrieval, provider-level date windows and disabled-by-default enrichment. Provider responses mocked; live coverage unverified.');
 }finally{rmSync(dir,{recursive:true,force:true})}

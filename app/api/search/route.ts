@@ -1,6 +1,7 @@
 export const runtime = "nodejs";
 export const maxDuration = 30;
-import { discover, sources, Source } from "@/lib/discovery";
+import { discover, sources, Source, type Freshness } from "@/lib/discovery";
+import { enrich, enrichmentStatus } from "@/lib/enrich";
 
 function allowedOrigins(request: Request): Set<string> {
   const origins = new Set<string>();
@@ -83,6 +84,13 @@ export async function POST(request: Request) {
       ? b.youtubeToken
       : null,
     String(b.sort || "views:desc"),
+    (["all", "7", "30", "365"].includes(String(b.freshness)) ? String(b.freshness) : "all") as Freshness,
   );
-  return Response.json(result, { headers });
+  // Instagram, TikTok and Facebook arrive without counts. When an enrichment vendor
+  // is configured this fills them in; otherwise the results pass through untouched.
+  const filled = await enrich(result.videos);
+  return Response.json(
+    { ...result, videos: filled.videos, enrichment: { ...enrichmentStatus(), filled: filled.enriched, error: filled.error } },
+    { headers },
+  );
 }

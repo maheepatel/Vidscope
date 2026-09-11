@@ -11,6 +11,34 @@ A guest-first public-video search app. Same list UI; the main Search button call
 | Reddit, Dailymotion, Vimeo | Brave video index | Views if returned; likes/comments unavailable | Brave thumbnail when supplied |
 | Other websites | Brave video index | Views if returned; likes/comments unavailable | Brave thumbnail when supplied |
 
+## Where the numbers come from
+
+| Source | Discovery | Views | Likes | Comments | Date |
+| --- | --- | --- | --- | --- | --- |
+| YouTube | Data API, 50 per page | yes | yes | yes | yes |
+| Dailymotion | its own open API, no key needed | yes | yes | yes | yes |
+| Vimeo | Brave video index | often | no | no | often |
+| Instagram, TikTok, Facebook | Brave web index | no | no | no | no |
+
+Instagram, TikTok and Facebook show these counts to anyone browsing their apps but
+expose none of them to a developer. Their official APIs return only the posts of the
+account that authorised the app, and neither Instagram nor TikTok publishes a keyword
+or hashtag search endpoint. Connecting a user's own account does not change this: the
+token covers that user's own media, not the reels a search turns up. The only routes to
+those numbers are a vendor that already collects them at scale, or running that
+collection yourself.
+
+`lib/enrich.ts` is the seam for the first. Set `ENRICH_PROVIDER` to `apify`,
+`brightdata` or `scrapecreators` and `ENRICH_API_KEY` to that vendor's key, and social
+results get their counts filled in after discovery. Left at `none` the app behaves
+exactly as before and those rows stay honestly blank. Published vendor pricing at the
+time of writing runs from about $1.50 to $15 per thousand records, so enriching forty
+results costs a few cents per search. `/api/health` reports which provider is live.
+
+A date window is passed down to every provider rather than applied to whatever came
+back, because the providers rank established content first. On one test query "last
+year" returns 153 results instead of 15, and "last 30 days" returns 150 instead of none.
+
 ## Ranking, thumbnails and the guided tour
 
 **Comment-verified top picks.** After a search returns, the app makes a second request to

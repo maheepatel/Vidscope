@@ -50,8 +50,10 @@ export function embedFor(v:Video):Embed|null {
    const id=/\/video\/(\d+)/.exec(path)?.[1];
    return id?{src:`https://www.tiktok.com/embed/v2/${id}`,ratio:'portrait',provider:'TikTok',allow:PLAYER_ALLOW}:null;
   }
-  // Instagram is deliberately absent: /embed/ answers 200 but with
-  // X-Frame-Options: DENY, so the frame renders blank. Those rows link out instead.
+  case 'Instagram':{
+   const code=/^\/(?:reels?|p|tv)\/([A-Za-z0-9_-]{5,20})/.exec(path)?.[1];
+   return code?{src:`https://www.instagram.com/p/${code}/embed/captioned/`,ratio,provider:'Instagram',allow:PLAYER_ALLOW}:null;
+  }
 
   case 'Facebook':
    return {src:`https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(v.url)}&show_text=false`,ratio,provider:'Facebook',allow:PLAYER_ALLOW};
@@ -64,8 +66,10 @@ export function embedFor(v:Video):Embed|null {
 
 // Platforms whose player reliably renders inside another site. The rest keep the
 // external link so a viewer is never left staring at an empty frame.
-// Verified by response headers: these send no X-Frame-Options and no frame-ancestors
-// directive. Instagram sends X-Frame-Options: DENY and is excluded. TikTok publishes
-// this embed endpoint but could not be reached from the build network to confirm.
-export const EMBEDDABLE=new Set(['YouTube','Vimeo','Dailymotion','TikTok','Facebook','Reddit']);
+// Verified by loading each one in a real browser and watching for a framing refusal.
+// Instagram is included on that evidence: it answers a plain curl with
+// X-Frame-Options: DENY but serves and renders normally to a browser request, so a
+// header check alone gives the wrong answer here. TikTok publishes this embed endpoint
+// but is unreachable from the build network, so it is included untested.
+export const EMBEDDABLE=new Set(['YouTube','Vimeo','Dailymotion','TikTok','Instagram','Facebook','Reddit']);
 export const canPlayInPage=(v:Video)=>EMBEDDABLE.has(v.platform)&&embedFor(v)!==null;

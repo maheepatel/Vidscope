@@ -232,3 +232,14 @@ body{background:var(--bg);color:var(--ink)}button:focus-visible,a:focus-visible,
 }
 .player-side h3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .player-desc{display:-webkit-box;-webkit-line-clamp:6;-webkit-box-orient:vertical;overflow:hidden}
+.player-nav{position:absolute;right:12px;top:12px;display:flex;gap:6px}
+.player-nav button{display:grid;place-items:center;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.player-nav button:hover:not(:disabled){background:var(--surface-2);color:var(--ink)}
+.player-nav button:disabled{opacity:.35;cursor:default}
+.player-position{position:absolute;right:14px;top:52px;font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.player-side h3{margin-right:118px}
+.player-origin{margin:14px 0 0;font-size:11px;line-height:1.6;color:var(--ink-3)}
+.player-origin a{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
+.player-out{background:var(--surface);color:var(--ink-2);border:1px solid var(--line);font-weight:500;font-size:12px}
+.player-out:hover{background:var(--surface-2);color:var(--ink)}
+.video-title svg{color:var(--brand)}

@@ -9,8 +9,10 @@ const compile=s=>ts.transpileModule(s,{compilerOptions:{target:ts.ScriptTarget.E
 try{
 writeFileSync(join(dir,'trust.mjs'),compile(readFileSync('lib/trust.ts','utf8')));
 writeFileSync(join(dir,'videos.mjs'),compile(readFileSync('lib/videos.ts','utf8')));
+writeFileSync(join(dir,'embed.mjs'),compile(readFileSync('lib/embed.ts','utf8').replace("from './videos'","from './videos.mjs'")));
 const {classify,scoreVideo}=await import(pathToFileURL(join(dir,'trust.mjs')));
 const {seconds,dedupeVideos,derivedThumbnail,posterSeed,filterVideos,languageOf,languageLabel,languagesIn}=await import(pathToFileURL(join(dir,'videos.mjs')));
+const {embedFor,canPlayInPage,isVertical}=await import(pathToFileURL(join(dir,'embed.mjs')));
 
 // --- comment classification -------------------------------------------------
 assert.equal(classify('I made this yesterday and it turned out amazing'),'outcome');
@@ -173,5 +175,29 @@ assert.equal(dedupeVideos(mirrors,'comments:desc')[0].comments,34000,'comment so
 assert.equal(dedupeVideos(mirrors,'likes:desc')[0].likes,900);
 assert.equal(dedupeVideos(mirrors,'comments:desc')[0].alternates.length,1);
 
-console.log('PASS: comment classification, outcome-weighted trust scoring, bot and engagement-bait rejection, complaint and age penalties, sample-size damping, score bounds, duration parsing, length filtering, thumbnail derivation, placeholder seeds, clock-form durations, language detection and sort-aware repost collapse.');
+
+// --- in-page playback: every platform resolves to its own embed endpoint ----------
+const vid=(url,extra={})=>({url,title:'x',platform:(new URL(url).hostname.includes('youtu')?'YouTube':new URL(url).hostname.includes('vimeo')?'Vimeo':new URL(url).hostname.includes('dailymotion')?'Dailymotion':new URL(url).hostname.includes('tiktok')?'TikTok':new URL(url).hostname.includes('instagram')?'Instagram':new URL(url).hostname.includes('facebook')?'Facebook':'Reddit'),duration:null,description:'',...extra});
+assert.match(embedFor(vid('https://www.youtube.com/watch?v=rEdl2Uetpvo')).src,/^https:\/\/www\.youtube-nocookie\.com\/embed\/rEdl2Uetpvo/);
+assert.equal(embedFor(vid('https://vimeo.com/287651716')).src,'https://player.vimeo.com/video/287651716');
+assert.equal(embedFor(vid('https://www.dailymotion.com/video/x8abcde')).src,'https://geo.dailymotion.com/player.html?video=x8abcde');
+assert.equal(embedFor(vid('https://www.tiktok.com/@baker/video/1234')).src,'https://www.tiktok.com/embed/v2/1234');
+assert.equal(embedFor(vid('https://www.instagram.com/reel/DMOaUaoyT8x/')).src,'https://www.instagram.com/p/DMOaUaoyT8x/embed/captioned/');
+assert.match(embedFor(vid('https://www.facebook.com/x/videos/123/')).src,/plugins\/video\.php/);
+// A link with no resolvable id must not produce a broken frame.
+assert.equal(embedFor(vid('https://vimeo.com/channels/staffpicks')),null);
+assert.equal(canPlayInPage(vid('https://vimeo.com/channels/staffpicks')),false);
+assert.equal(canPlayInPage(vid('https://someblog.example/video/1')),false,'unknown hosts are not framed');
+
+// Shorts, reels and TikToks get a 9:16 frame; long-form gets 16:9.
+assert.equal(isVertical(vid('https://www.tiktok.com/@baker/video/1234')),true);
+assert.equal(isVertical(vid('https://www.instagram.com/reel/DMOaUaoyT8x/')),true);
+assert.equal(isVertical(vid('https://www.instagram.com/p/DMOaUaoyT8x/')),false,'a feed post is not assumed vertical');
+assert.equal(isVertical({...vid('https://www.youtube.com/watch?v=rEdl2Uetpvo'),duration:'PT45S'}),true);
+assert.equal(isVertical({...vid('https://www.youtube.com/watch?v=rEdl2Uetpvo'),duration:'PT9M10S'}),false);
+assert.equal(isVertical({...vid('https://www.youtube.com/watch?v=rEdl2Uetpvo'),title:'Recipe #shorts'}),true);
+assert.equal(embedFor({...vid('https://www.youtube.com/watch?v=rEdl2Uetpvo'),duration:'PT45S'}).ratio,'portrait');
+assert.equal(embedFor(vid('https://vimeo.com/287651716')).ratio,'landscape');
+
+console.log('PASS: comment classification, outcome-weighted trust scoring, bot and engagement-bait rejection, complaint and age penalties, sample-size damping, score bounds, duration parsing, length filtering, thumbnail derivation, placeholder seeds, clock-form durations, language detection sort-aware repost collapse and in-page embed resolution.');
 }finally{rmSync(dir,{recursive:true,force:true})}

@@ -3,6 +3,7 @@ import {ShieldCheck, Loader2, Info} from 'lucide-react';
 import {type Trust, VERDICT_LABEL} from '@/lib/trust';
 import {type Video} from '@/lib/videos';
 import {Thumb} from './poster';
+import {canPlayInPage} from '@/lib/embed';
 
 export type Analysis = {
   state: 'idle' | 'running' | 'ok' | 'unavailable' | 'not_configured' | 'unsupported' | 'error';
@@ -52,10 +53,12 @@ export function Verdict({
   analysis,
   byId,
   onExplain,
+  onPlay,
 }: {
   analysis: Analysis;
   byId: Map<string, Video>;
   onExplain: () => void;
+  onPlay: (video: Video) => void;
 }) {
   if (analysis.state === 'idle') return null;
 
@@ -103,12 +106,22 @@ export function Verdict({
             const proof = trust.evidence[0];
             return (
               <article className="verdict-card" key={trust.id}>
-                <Thumb video={video} eager>
+                <Thumb video={video} eager onPlay={canPlayInPage(video) ? () => onPlay(video) : undefined}>
                   <span className="verdict-rank">#{i + 1}</span>
                 </Thumb>
                 <div>
                   <h4>
-                    <a href={video.url} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={video.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => {
+                        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                        if (!canPlayInPage(video)) return;
+                        e.preventDefault();
+                        onPlay(video);
+                      }}
+                    >
                       {video.title}
                     </a>
                   </h4>

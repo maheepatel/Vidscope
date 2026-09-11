@@ -65,6 +65,16 @@ a blank grey box.
 **Repost collapse.** On by default. Near-identical titles across channels and platforms
 group onto the best-evidenced copy, with the rest shown as a "+n reposts" count.
 
+**Playback stays on Vidscope.** The thumbnail, the title, the details link and the
+top-pick cards all open the platform's own player in a modal on the page, alongside the
+metrics, trust score and evidence. Chevrons and the arrow keys move through the result
+list without going back to it. Shorts, reels and TikToks get a 9:16 frame and everything
+else 16:9. Every provider was checked by loading its embed in a real browser rather than
+by reading response headers, which gives the wrong answer for Instagram: it replies to a
+plain request with X-Frame-Options: DENY but serves and renders normally to a browser.
+On one test query 225 of 226 results play in place. A small "Open on <platform>" link
+stays in the player for the rare link no provider will frame.
+
 **Length filter, tour and theme.** Results can be narrowed to under 5 minutes, 5–20
 minutes or over 20 minutes using the duration the source reported; results with no
 duration are only excluded when a band is chosen. A five-step tour runs once for a new

@@ -11,6 +11,53 @@ A guest-first public-video search app. Same list UI; the main Search button call
 | Reddit, Dailymotion, Vimeo | Brave video index | Views if returned; likes/comments unavailable | Brave thumbnail when supplied |
 | Other websites | Brave video index | Views if returned; likes/comments unavailable | Brave thumbnail when supplied |
 
+## Ranking, thumbnails and the guided tour
+
+**Comment-verified top picks.** After a search returns, the app makes a second request to
+`/api/analyze`, which reads up to 100 relevance-ordered comments for each of up to twelve
+YouTube results and scores them in `lib/trust.ts`. The score is deterministic — regex
+classification and arithmetic, no model — so the same comments always produce the same
+number. It discards timestamp-only replies, engagement bait, channel promo and links,
+then weights what is left by log10 of each comment's like count. Comments reporting an
+actual outcome ("I followed this and it worked") carry 34% of the raw merit; generic
+praise counts at under half that weight. Duplicated comment text, recurring complaints,
+unanswered questions, a like rate far below the ~4% YouTube norm for the view count, and
+an age over five years all reduce the result. Ranking is multiplied by a confidence
+factor from the sample size, and a video with fewer than eight substantive comments is
+labelled "Too few comments" and never leads the picks. Comment data exists for YouTube
+only; other platforms are listed but not scored, and the panel says so.
+
+**Thumbnails.** YouTube and Vimeo supply images directly. Instagram posters are fetched
+through `/api/thumb`, which accepts a shortcode and nothing else — no caller-supplied URL
+reaches `fetch` — because the browser's own cross-origin load of Instagram's poster is
+refused. TikTok and Facebook expose no public poster. Every row that still has no image
+renders a generated tile whose colour is derived from the video URL, so no result is ever
+a blank grey box.
+
+**Repost collapse.** On by default. Near-identical titles across channels and platforms
+group onto the best-evidenced copy, with the rest shown as a "+n reposts" count.
+
+**Length filter, tour and theme.** Results can be narrowed to under 5 minutes, 5–20
+minutes or over 20 minutes using the duration the source reported; results with no
+duration are only excluded when a band is chosen. A five-step tour runs once for a new
+visitor after their first search and can be reopened from the header. Light, dark and
+system themes are available from the header and remembered per device.
+
+## Quota cost per search
+
+| Call | Provider | Units |
+| --- | --- | --- |
+| Discovery search | YouTube Data API | 100 |
+| Statistics lookup | YouTube Data API | 1 |
+| Comment analysis | YouTube Data API | up to 12 |
+| Per-source discovery | Brave | up to 7 requests |
+
+Comment analysis adds at most twelve units to the roughly 101 a search already spends, so
+it changes the daily search ceiling by about a tenth. Load more only analyses candidates
+that have not been scored yet. Instagram poster requests hit `/api/thumb` once per image
+and are cached for a week at the CDN.
+
+
 These keys do not unlock every platform's statistics. This release has no general browser scraping/enrichment worker, persistent index, or restriction bypass. It does not guarantee exhaustive coverage or thumbnails for every result. Missing data stays unavailable, never zero or invented. External playback may require the source app/account/region. Search uses moderate safe-search. Ranking is within retrieved results, not a global internet ranking. The saved 60-link collection contains older snapshots, not live data.
 
 ## 1. Install locally (Windows / VS Code)
@@ -60,6 +107,12 @@ Browser checks:
 - Check highest views, likes and comments; missing counts must stay last, zero must remain zero.
 - Test platform/date/metric filters, reset and Load more; results must not duplicate.
 - Check a narrow mobile viewport and keyboard controls.
+- Confirm the top-picks panel appears within a second or two of the list, and that its
+  quoted comments open the video they came from.
+- Confirm every row shows either a real thumbnail or a generated tile, never an empty box.
+- Switch between light, dark and system and reload; the choice must survive the reload.
+- Clear this site's local storage and search once; the tour must appear, and must not
+  reappear after it is dismissed.
 
 Then stop the dev server with Ctrl+C and run:
 
